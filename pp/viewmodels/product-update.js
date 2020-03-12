@@ -27,10 +27,6 @@ var app = new Vue({
     mounted() {
         console.log('view mounted');
 
-        tinymce.init({
-            selector: '#mytextarea'
-        });
-
         var url = new URL(location.href);
         this.productId = url.searchParams.get("productId");
         if (!this.productId) {
