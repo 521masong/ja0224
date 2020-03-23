@@ -1,12 +1,18 @@
 package io.cjf.jcartstoreback.controller;
 
+import com.alibaba.fastjson.JSON;
 import com.github.pagehelper.Page;
 import io.cjf.jcartstoreback.dto.in.ProductSearchInDTO;
 import io.cjf.jcartstoreback.dto.out.PageOutDTO;
 import io.cjf.jcartstoreback.dto.out.ProductListOutDTO;
 import io.cjf.jcartstoreback.dto.out.ProductShowOutDTO;
+import io.cjf.jcartstoreback.mq.HotProductDTO;
+import io.cjf.jcartstoreback.po.ProductOperation;
+import io.cjf.jcartstoreback.service.ProductOperationService;
 import io.cjf.jcartstoreback.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +24,16 @@ public class ProductController {
 
     @Autowired
     private ProductService productService;
+
+    @Autowired
+    private ProductOperationService productOperationService;
+
+    @Autowired
+    private KafkaTemplate kafkaTemplate;
+
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+
 
     @GetMapping("/search")
     public PageOutDTO<ProductListOutDTO> search(ProductSearchInDTO productSearchInDTO,
@@ -35,14 +51,25 @@ public class ProductController {
     @GetMapping("/getById")
     public ProductShowOutDTO getById(@RequestParam Integer productId){
         ProductShowOutDTO productShowOutDTO = productService.getById(productId);
+        HotProductDTO hotProductDTO = new HotProductDTO();
+        hotProductDTO.setProductId(productId);
+        hotProductDTO.setProductCode(productShowOutDTO.getProductCode());
+        kafkaTemplate.send("hotproduct", JSON.toJSONString(hotProductDTO));
         return productShowOutDTO;
     }
 
     @GetMapping("/hot")
-    public List<ProductListOutDTO> hot(){
+    public List<ProductOperation> hot(){
 
-        return null;
+        String hotProductsJson = redisTemplate.opsForValue().get("HotProducts");
+        if (hotProductsJson != null){
+            List<ProductOperation> productOperations = JSON.parseArray(hotProductsJson, ProductOperation.class);
+            return productOperations;
+        }else {
+            List<ProductOperation> hotProducts = productOperationService.selectHotProduct();
+            redisTemplate.opsForValue().set("HotProducts", JSON.toJSONString(hotProducts));
+            return hotProducts;
+        }
     }
-
 
 }
